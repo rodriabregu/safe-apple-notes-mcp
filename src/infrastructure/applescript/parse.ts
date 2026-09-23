@@ -114,3 +114,29 @@ export function parseAppendResult(raw: string): ParsedAppendResult {
   const [id, title] = parts;
   return { locked: false, id, title };
 }
+
+export type ParsedDeleteResult =
+  | { locked: true; id: string }
+  | { locked: false; id: string; title: string; folder: string };
+
+export function parseDeleteResult(raw: string): ParsedDeleteResult {
+  const parts = raw.split(FIELD_SEP);
+  if (parts[0] === LOCKED_SENTINEL) {
+    return { locked: true, id: parts[1] };
+  }
+  const [id, title, folder] = parts;
+  return { locked: false, id, title, folder };
+}
+
+export type ParsedUpdateResult =
+  | { locked: true; id: string }
+  | { locked: false; id: string; title: string };
+
+export function parseUpdateResult(raw: string): ParsedUpdateResult {
+  const parts = raw.split(FIELD_SEP);
+  if (parts[0] === LOCKED_SENTINEL) {
+    return { locked: true, id: parts[1] };
+  }
+  const [id, title] = parts;
+  return { locked: false, id, title };
+}

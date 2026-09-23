@@ -12,6 +12,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error("apple-notes-mcp-lite failed to start:", error);
+  console.error("safe-apple-notes-mcp failed to start:", error);
   process.exit(1);
 });

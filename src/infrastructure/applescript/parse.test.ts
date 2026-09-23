@@ -4,9 +4,11 @@ import {
   parseAppendResult,
   parseCreateResult,
   parseDateParts,
+  parseDeleteResult,
   parseFolderRecords,
   parseGetNoteResult,
   parseNoteSummaryRecords,
+  parseUpdateResult,
 } from "./parse.js";
 
 describe("parseDateParts", () => {
@@ -142,5 +144,38 @@ describe("parseAppendResult", () => {
     const raw = ["LOCKED", "id-1"].join(FIELD_SEP);
 
     expect(parseAppendResult(raw)).toEqual({ locked: true, id: "id-1" });
+  });
+});
+
+describe("parseDeleteResult", () => {
+  it("parses id, title, and folder", () => {
+    const raw = ["id-1", "Groceries", "Personal"].join(FIELD_SEP);
+
+    expect(parseDeleteResult(raw)).toEqual({
+      locked: false,
+      id: "id-1",
+      title: "Groceries",
+      folder: "Personal",
+    });
+  });
+
+  it("reports a locked note", () => {
+    const raw = ["LOCKED", "id-1"].join(FIELD_SEP);
+
+    expect(parseDeleteResult(raw)).toEqual({ locked: true, id: "id-1" });
+  });
+});
+
+describe("parseUpdateResult", () => {
+  it("parses id and title", () => {
+    const raw = ["id-1", "Groceries"].join(FIELD_SEP);
+
+    expect(parseUpdateResult(raw)).toEqual({ locked: false, id: "id-1", title: "Groceries" });
+  });
+
+  it("reports a locked note", () => {
+    const raw = ["LOCKED", "id-1"].join(FIELD_SEP);
+
+    expect(parseUpdateResult(raw)).toEqual({ locked: true, id: "id-1" });
   });
 });

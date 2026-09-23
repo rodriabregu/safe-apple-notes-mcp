@@ -261,3 +261,53 @@ tell application "Notes"
   return (id of n) & ${AS_FIELD_SEP} & (name of n)
 end tell`;
 }
+
+/**
+ * Deletes one note by id. Notes.app moves a deleted note to Recently
+ * Deleted (recoverable for 30 days) rather than destroying it outright.
+ * Refuses password-protected notes via the {@link LOCKED_SENTINEL}. The
+ * note's id, name, and container name are captured into variables *before*
+ * `delete n`, mirroring {@link getNoteScript}'s container-variable pattern,
+ * because references into a just-deleted note are not guaranteed to still
+ * resolve afterwards.
+ */
+export function deleteNoteScript(id: string): string {
+  const safeId = quote(id);
+  return `
+tell application "Notes"
+  set n to note id ${safeId}
+  if password protected of n then
+    return "${LOCKED_SENTINEL}" & ${AS_FIELD_SEP} & (id of n)
+  end if
+  set containerRef to container of n
+  set folderName to name of containerRef
+  set noteId to id of n
+  set noteName to name of n
+  delete n
+  return noteId & ${AS_FIELD_SEP} & noteName & ${AS_FIELD_SEP} & folderName
+end tell`;
+}
+
+/**
+ * Replaces an existing note's body with pre-built HTML. Refuses
+ * password-protected notes via the {@link LOCKED_SENTINEL}.
+ *
+ * This is the ONLY place in the codebase allowed to `set body of n to` a
+ * literal string. Every other body-touching script ({@link appendToNoteScript})
+ * always appends via `(body of n) & ...`, so it never discards existing
+ * content; `updateNoteScript` is the sole, deliberate exception — it backs
+ * `update_note`, whose entire purpose is to replace a note's body.
+ */
+export function updateNoteScript(id: string, html: string): string {
+  const safeId = quote(id);
+  const safeHtml = quote(html);
+  return `
+tell application "Notes"
+  set n to note id ${safeId}
+  if password protected of n then
+    return "${LOCKED_SENTINEL}" & ${AS_FIELD_SEP} & (id of n)
+  end if
+  set body of n to ${safeHtml}
+  return (id of n) & ${AS_FIELD_SEP} & (name of n)
+end tell`;
+}

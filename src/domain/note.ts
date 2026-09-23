@@ -45,3 +45,20 @@ export interface AppendedNote {
   id: string;
   title: string;
 }
+
+/** Result of deleting a note. */
+export interface DeletedNote {
+  id: string;
+  title: string;
+  folder: string;
+  recoverableFrom: string;
+}
+
+/** Result of replacing a note's body. `previousBody`/`body` are both markdown. */
+export interface UpdatedNote {
+  id: string;
+  title: string;
+  folder: string;
+  previousBody: string;
+  body: string;
+}

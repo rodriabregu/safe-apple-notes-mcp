@@ -231,4 +231,91 @@ describe("AppleScriptNotesRepository", () => {
       await expect(repo.appendToNote("id-1", "more text")).rejects.toThrow(NoteNotFoundError);
     });
   });
+
+  describe("deleteNote", () => {
+    it("deletes the note and returns id/title/folder plus the recovery note", async () => {
+      runner.enqueue(["id-1", "Groceries", "Personal"].join(FIELD_SEP));
+
+      const result = await repo.deleteNote("id-1");
+
+      expect(result).toEqual({
+        id: "id-1",
+        title: "Groceries",
+        folder: "Personal",
+        recoverableFrom: "Recently Deleted (30 days)",
+      });
+      expect(runner.calls[0]).toContain("delete n");
+    });
+
+    it("throws NoteLockedError for a password-protected note", async () => {
+      runner.enqueue(["LOCKED", "id-1"].join(FIELD_SEP));
+
+      await expect(repo.deleteNote("id-1")).rejects.toThrow(NoteLockedError);
+    });
+
+    it("throws NoteNotFoundError when Notes.app can't find the id", async () => {
+      runner.enqueueError(new AppleScriptError("Can't get note id \"id-1\". Invalid index. (-1728)"));
+
+      await expect(repo.deleteNote("id-1")).rejects.toThrow(NoteNotFoundError);
+    });
+  });
+
+  describe("updateNote", () => {
+    it("reads the current body, replaces it, and returns both bodies as markdown", async () => {
+      runner.enqueue(
+        [
+          "id-1",
+          "Groceries",
+          "Personal",
+          "2024-1-1-0-0-0",
+          "2024-1-2-0-0-0",
+          "<h1>Groceries</h1><div>Eggs</div>",
+        ].join(FIELD_SEP)
+      );
+      runner.enqueue(["id-1", "Groceries"].join(FIELD_SEP));
+
+      const result = await repo.updateNote("id-1", "Bread\nButter", undefined);
+
+      expect(result.id).toBe("id-1");
+      expect(result.title).toBe("Groceries");
+      expect(result.folder).toBe("Personal");
+      expect(result.previousBody).toContain("Eggs");
+      expect(result.body).toContain("Bread");
+      expect(result.body).toContain("Butter");
+      // Second call replaces the body; keeps the existing title as <h1> when
+      // no new title was given.
+      expect(runner.calls[1]).toContain("<h1>Groceries</h1><div>Bread</div><div>Butter</div>");
+      expect(runner.calls[1]).not.toContain("(body of n) &");
+    });
+
+    it("uses the given title instead of the note's existing name when provided", async () => {
+      runner.enqueue(
+        [
+          "id-1",
+          "Groceries",
+          "Personal",
+          "2024-1-1-0-0-0",
+          "2024-1-2-0-0-0",
+          "<h1>Groceries</h1><div>Eggs</div>",
+        ].join(FIELD_SEP)
+      );
+      runner.enqueue(["id-1", "Shopping"].join(FIELD_SEP));
+
+      await repo.updateNote("id-1", "Bread", "Shopping");
+
+      expect(runner.calls[1]).toContain("<h1>Shopping</h1><div>Bread</div>");
+    });
+
+    it("throws NoteLockedError when the note is password protected", async () => {
+      runner.enqueue(["LOCKED", "id-1"].join(FIELD_SEP));
+
+      await expect(repo.updateNote("id-1", "Bread", undefined)).rejects.toThrow(NoteLockedError);
+    });
+
+    it("throws NoteNotFoundError when Notes.app can't find the id", async () => {
+      runner.enqueueError(new AppleScriptError("Can't get note id \"id-1\". Invalid index. (-1728)"));
+
+      await expect(repo.updateNote("id-1", "Bread", undefined)).rejects.toThrow(NoteNotFoundError);
+    });
+  });
 });

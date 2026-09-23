@@ -1,10 +1,12 @@
 import type {
   AppendedNote,
   CreatedNote,
+  DeletedNote,
   Folder,
   Note,
   NoteBodyFormat,
   NoteSummary,
+  UpdatedNote,
 } from "./note.js";
 
 /**
@@ -59,4 +61,23 @@ export interface NotesRepository {
    * @throws NoteLockedError when the note is password protected.
    */
   appendToNote(id: string, text: string): Promise<AppendedNote>;
+
+  /**
+   * Delete a single note by id. Notes.app moves it to Recently Deleted,
+   * where it stays recoverable for 30 days — this never permanently
+   * destroys it. There is no batch or title-based variant.
+   * @throws NoteNotFoundError when no note has this id.
+   * @throws NoteLockedError when the note is password protected.
+   */
+  deleteNote(id: string): Promise<DeletedNote>;
+
+  /**
+   * Replace an existing note's body (and optionally its title). Unlike
+   * appendToNote, this overwrites existing content; the previous body is
+   * returned as undo material.
+   * @param title - New title; when omitted, the note's existing title is kept.
+   * @throws NoteNotFoundError when no note has this id.
+   * @throws NoteLockedError when the note is password protected.
+   */
+  updateNote(id: string, body: string, title: string | undefined): Promise<UpdatedNote>;
 }

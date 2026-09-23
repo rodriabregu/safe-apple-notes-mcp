@@ -27,8 +27,9 @@ const READ_ONLY_ANNOTATIONS = {
 } as const;
 
 /**
- * Annotations for a tool that writes to Notes.app. Never destructive (no
- * delete/overwrite) and never idempotent (each call adds a note or content).
+ * Annotations for a tool that writes to Notes.app without destroying or
+ * overwriting anything (create, append). Never destructive and never
+ * idempotent (each call adds a note or content).
  */
 const WRITE_ANNOTATIONS = {
   readOnlyHint: false,
@@ -37,7 +38,18 @@ const WRITE_ANNOTATIONS = {
   openWorldHint: false,
 } as const;
 
-/** `_meta` carried by both write tools; forces a user prompt on every call. */
+/**
+ * Annotations for a tool that destroys or overwrites existing content
+ * (delete, update). Never idempotent.
+ */
+const DESTRUCTIVE_WRITE_ANNOTATIONS = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+} as const;
+
+/** `_meta` carried by every write/delete tool; forces a user prompt on every call. */
 const REQUIRES_USER_INTERACTION = { [REQUIRES_USER_INTERACTION_META]: true } as const;
 
 /** Clamps an optional limit to `[1, max]`, defaulting to `fallback` when unset. */
@@ -139,6 +151,35 @@ export const TOOL_DEFINITIONS = {
       text: z.string().min(1).describe("Plain text to append. Each line becomes one paragraph."),
     },
     annotations: WRITE_ANNOTATIONS,
+    _meta: REQUIRES_USER_INTERACTION,
+  },
+  delete_note: {
+    title: "Delete note",
+    description:
+      "Delete one note by id. Notes.app moves it to Recently Deleted, where it stays recoverable " +
+      "for 30 days — this never permanently destroys it. There is no batch or title-based variant.",
+    inputShape: {
+      id: z.string().min(1).describe("Id of the note to delete."),
+    },
+    annotations: DESTRUCTIVE_WRITE_ANNOTATIONS,
+    _meta: REQUIRES_USER_INTERACTION,
+  },
+  update_note: {
+    title: "Update note",
+    description:
+      "Replace an existing note's body, and optionally its title. Unlike append_to_note, this " +
+      "overwrites the note's existing content; the previous body is returned as undo material. " +
+      "Fails with a clear error if the note is password protected.",
+    inputShape: {
+      id: z.string().min(1).describe("Id of the note to update."),
+      body: z.string().describe("New plain-text body. Each line becomes one paragraph."),
+      title: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("New title. When omitted, the note's existing title is kept."),
+    },
+    annotations: DESTRUCTIVE_WRITE_ANNOTATIONS,
     _meta: REQUIRES_USER_INTERACTION,
   },
 } as const;

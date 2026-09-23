@@ -6,7 +6,9 @@ import { InMemoryNotesRepository } from "../../test/fakes/inMemoryNotesRepositor
 import { createMcpServer } from "./mcpServer.js";
 
 const READ_TOOL_NAMES = ["list_folders", "list_notes", "search_notes", "get_note"];
-const WRITE_TOOL_NAMES = ["create_note", "append_to_note"];
+const WRITE_TOOL_NAMES = ["create_note", "append_to_note", "update_note", "delete_note"];
+const NON_DESTRUCTIVE_WRITE_TOOL_NAMES = ["create_note", "append_to_note"];
+const DESTRUCTIVE_WRITE_TOOL_NAMES = ["update_note", "delete_note"];
 
 async function connectedClient(repo: InMemoryNotesRepository) {
   const server = createMcpServer(repo);
@@ -31,7 +33,7 @@ describe("createMcpServer", () => {
     repo = new InMemoryNotesRepository();
   });
 
-  it("exposes exactly the 6 approved tools and no others", async () => {
+  it("exposes exactly the 8 approved tools and no others", async () => {
     const client = await connectedClient(repo);
 
     const { tools } = await client.listTools();
@@ -40,10 +42,12 @@ describe("createMcpServer", () => {
       [
         "append_to_note",
         "create_note",
+        "delete_note",
         "get_note",
         "list_folders",
         "list_notes",
         "search_notes",
+        "update_note",
       ].sort()
     );
   });
@@ -82,7 +86,7 @@ describe("createMcpServer", () => {
   );
 
   it.each(WRITE_TOOL_NAMES)(
-    "%s is annotated as a write and strictly requires user interaction",
+    "%s is annotated as a write, non-idempotent, and strictly requires user interaction",
     async (name) => {
       const client = await connectedClient(repo);
 
@@ -90,12 +94,32 @@ describe("createMcpServer", () => {
       const tool = tools.find((t) => t.name === name);
 
       expect(tool?.annotations?.readOnlyHint).toBe(false);
-      expect(tool?.annotations?.destructiveHint).toBe(false);
       expect(tool?.annotations?.idempotentHint).toBe(false);
       expect(tool?.annotations?.openWorldHint).toBe(false);
       expect(tool?._meta?.[REQUIRES_USER_INTERACTION_META]).toBe(true);
     }
   );
+
+  it.each(NON_DESTRUCTIVE_WRITE_TOOL_NAMES)(
+    "%s is not annotated destructive",
+    async (name) => {
+      const client = await connectedClient(repo);
+
+      const { tools } = await client.listTools();
+      const tool = tools.find((t) => t.name === name);
+
+      expect(tool?.annotations?.destructiveHint).toBe(false);
+    }
+  );
+
+  it.each(DESTRUCTIVE_WRITE_TOOL_NAMES)("%s is annotated destructive", async (name) => {
+    const client = await connectedClient(repo);
+
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === name);
+
+    expect(tool?.annotations?.destructiveHint).toBe(true);
+  });
 
   it("list_folders returns folders from the repository", async () => {
     repo.seedFolder({ id: "f1", name: "Work", account: "iCloud" });
@@ -260,5 +284,96 @@ describe("createMcpServer", () => {
     });
 
     expect(result.isError).toBe(true);
+  });
+
+  it("delete_note deletes the note and returns id/title/folder plus the recovery note", async () => {
+    const stored = repo.seedNote({ title: "Shopping", folder: "Personal" });
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({ name: "delete_note", arguments: { id: stored.id } });
+    const deleted = JSON.parse(textOf(result as never));
+
+    expect(deleted).toEqual({
+      id: stored.id,
+      title: "Shopping",
+      folder: "Personal",
+      recoverableFrom: "Recently Deleted (30 days)",
+    });
+    const remaining = await client.callTool({ name: "list_notes", arguments: {} });
+    expect(JSON.parse(textOf(remaining as never))).toEqual([]);
+  });
+
+  it("delete_note returns an MCP tool error for an unknown id", async () => {
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({ name: "delete_note", arguments: { id: "missing" } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never)).toContain("missing");
+  });
+
+  it("delete_note returns an MCP tool error for a locked note", async () => {
+    const stored = repo.seedNote({ title: "Secret", folder: "Personal", locked: true });
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({ name: "delete_note", arguments: { id: stored.id } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never).toLowerCase()).toContain("password");
+  });
+
+  it("update_note replaces the body and returns the previous body as undo material", async () => {
+    const stored = repo.seedNote({ title: "Shopping", folder: "Personal", plaintext: "Milk" });
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({
+      name: "update_note",
+      arguments: { id: stored.id, body: "Bread" },
+    });
+    const updated = JSON.parse(textOf(result as never));
+
+    expect(updated.id).toBe(stored.id);
+    expect(updated.title).toBe("Shopping");
+    expect(updated.folder).toBe("Personal");
+    expect(updated.previousBody).toContain("Milk");
+    expect(updated.body).toContain("Bread");
+  });
+
+  it("update_note accepts an optional new title", async () => {
+    const stored = repo.seedNote({ title: "Shopping", folder: "Personal", plaintext: "Milk" });
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({
+      name: "update_note",
+      arguments: { id: stored.id, body: "Bread", title: "Groceries" },
+    });
+    const updated = JSON.parse(textOf(result as never));
+
+    expect(updated.title).toBe("Groceries");
+  });
+
+  it("update_note returns an MCP tool error for an unknown id", async () => {
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({
+      name: "update_note",
+      arguments: { id: "missing", body: "Bread" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never)).toContain("missing");
+  });
+
+  it("update_note returns an MCP tool error for a locked note", async () => {
+    const stored = repo.seedNote({ title: "Secret", folder: "Personal", locked: true });
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({
+      name: "update_note",
+      arguments: { id: stored.id, body: "Bread" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never).toLowerCase()).toContain("password");
   });
 });

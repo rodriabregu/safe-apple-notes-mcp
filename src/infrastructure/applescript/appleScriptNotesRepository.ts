@@ -1,10 +1,12 @@
 import type {
   AppendedNote,
   CreatedNote,
+  DeletedNote,
   Folder,
   Note,
   NoteBodyFormat,
   NoteSummary,
+  UpdatedNote,
 } from "../../domain/note.js";
 import type { NotesRepository } from "../../domain/notesRepository.js";
 import { AppleScriptError, NoteLockedError, NoteNotFoundError } from "../../domain/errors.js";
@@ -12,9 +14,11 @@ import { htmlToMarkdown, htmlToPlaintext } from "../markdown/htmlToMarkdown.js";
 import {
   parseAppendResult,
   parseCreateResult,
+  parseDeleteResult,
   parseFolderRecords,
   parseGetNoteResult,
   parseNoteSummaryRecords,
+  parseUpdateResult,
   type ParsedNoteSummary,
 } from "./parse.js";
 import type { AppleScriptRunner } from "./runner.js";
@@ -23,11 +27,13 @@ import {
   buildAppendHtml,
   buildCreateNoteHtml,
   createNoteScript,
+  deleteNoteScript,
   findNotesByTitleScript,
   getNoteScript,
   listFoldersScript,
   listNotesScript,
   searchNotesScript,
+  updateNoteScript,
 } from "./scripts.js";
 
 /** Matches the Notes.app error raised when a note id no longer resolves. */
@@ -113,5 +119,40 @@ export class AppleScriptNotesRepository implements NotesRepository {
     const parsed = parseAppendResult(raw);
     if (parsed.locked) throw new NoteLockedError(parsed.id);
     return { id: parsed.id, title: parsed.title };
+  }
+
+  async deleteNote(id: string): Promise<DeletedNote> {
+    const raw = this.runOrTranslateNotFound(deleteNoteScript(id), id);
+    const parsed = parseDeleteResult(raw);
+    if (parsed.locked) throw new NoteLockedError(parsed.id);
+    return {
+      id: parsed.id,
+      title: parsed.title,
+      folder: parsed.folder,
+      recoverableFrom: "Recently Deleted (30 days)",
+    };
+  }
+
+  async updateNote(id: string, body: string, title: string | undefined): Promise<UpdatedNote> {
+    // Read the current body first so it can be returned as undo material —
+    // this also gives us the note's folder and, when no new title is given,
+    // its existing name to keep as the <h1>.
+    const currentRaw = this.runOrTranslateNotFound(getNoteScript(id), id);
+    const current = parseGetNoteResult(currentRaw);
+    if (current.locked) throw new NoteLockedError(current.id);
+
+    const newTitle = title ?? current.title;
+    const html = buildCreateNoteHtml(newTitle, body);
+    const updateRaw = this.runOrTranslateNotFound(updateNoteScript(id, html), id);
+    const updated = parseUpdateResult(updateRaw);
+    if (updated.locked) throw new NoteLockedError(updated.id);
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      folder: current.folder,
+      previousBody: htmlToMarkdown(current.body),
+      body: htmlToMarkdown(html),
+    };
   }
 }

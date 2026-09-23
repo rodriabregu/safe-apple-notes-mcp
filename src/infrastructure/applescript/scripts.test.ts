@@ -8,12 +8,14 @@ import {
   appendToNoteScript,
   buildCreateNoteHtml,
   createNoteScript,
+  deleteNoteScript,
   findNotesByTitleScript,
   getNoteScript,
   listFoldersScript,
   listNotesScript,
   LOCKED_SENTINEL,
   searchNotesScript,
+  updateNoteScript,
 } from "./scripts.js";
 
 describe("buildCreateNoteHtml", () => {
@@ -221,5 +223,78 @@ describe("appendToNoteScript", () => {
     expect(script).toContain('note id "x-coredata://abc/ICNote/p1"');
     expect(script).toContain(LOCKED_SENTINEL);
     expect(script).toContain('(body of n) & "<div>more</div>"');
+  });
+});
+
+describe("deleteNoteScript", () => {
+  it("targets the note by id and returns a locked sentinel for protected notes", () => {
+    const script = deleteNoteScript("x-coredata://abc/ICNote/p1");
+
+    expect(script).toContain('note id "x-coredata://abc/ICNote/p1"');
+    expect(script).toContain(LOCKED_SENTINEL);
+    expect(script).toContain("password protected");
+  });
+
+  it("resolves the container into a variable before reading its name", () => {
+    // Same failure mode as getNoteScript/createNoteScript: `name of
+    // container of n` fails on some real notes with a generic `item`-class
+    // reference. Assigning it to a variable first forces a concrete
+    // reference whose `name` resolves reliably.
+    const script = deleteNoteScript("x-coredata://abc/ICNote/p1");
+
+    expect(script).toContain("set containerRef to container of n");
+    expect(script).toContain("name of containerRef");
+    expect(script).not.toContain("name of container of n");
+  });
+
+  it("captures id, name, and folder before deleting, so the return value survives the delete", () => {
+    const script = deleteNoteScript("x-coredata://abc/ICNote/p1");
+    const captureIndex = script.indexOf("set noteName to name of n");
+    const deleteIndex = script.indexOf("delete n");
+
+    expect(captureIndex).toBeGreaterThan(-1);
+    expect(deleteIndex).toBeGreaterThan(-1);
+    expect(captureIndex).toBeLessThan(deleteIndex);
+  });
+});
+
+describe("updateNoteScript", () => {
+  it("targets the note by id and returns a locked sentinel for protected notes", () => {
+    const script = updateNoteScript("x-coredata://abc/ICNote/p1", "<h1>Title</h1><div>Body</div>");
+
+    expect(script).toContain('note id "x-coredata://abc/ICNote/p1"');
+    expect(script).toContain(LOCKED_SENTINEL);
+    expect(script).toContain("password protected");
+  });
+
+  it("replaces the body with the given html, instead of appending to it", () => {
+    const script = updateNoteScript("id-1", "<h1>Title</h1><div>Body</div>");
+
+    expect(script).toContain('set body of n to "<h1>Title</h1><div>Body</div>"');
+    expect(script).not.toContain("(body of n) &");
+  });
+});
+
+describe("body replacement is exclusive to updateNoteScript", () => {
+  it("is the only script builder that produces a literal `set body of n to \"` (a body " +
+    "replacement, not an append via `(body of n) & ...`)", () => {
+    const REPLACE_BODY_PATTERN = 'set body of n to "';
+    const scripts: Record<string, string> = {
+      listFoldersScript: listFoldersScript(),
+      listNotesScript: listNotesScript(undefined),
+      searchNotesScript: searchNotesScript("q"),
+      findNotesByTitleScript: findNotesByTitleScript("t"),
+      getNoteScript: getNoteScript("id-1"),
+      createNoteScript: createNoteScript("<h1>T</h1>", undefined),
+      appendToNoteScript: appendToNoteScript("id-1", "<div>x</div>"),
+      deleteNoteScript: deleteNoteScript("id-1"),
+      updateNoteScript: updateNoteScript("id-1", "<h1>T</h1><div>x</div>"),
+    };
+
+    const producers = Object.entries(scripts)
+      .filter(([, script]) => script.includes(REPLACE_BODY_PATTERN))
+      .map(([name]) => name);
+
+    expect(producers).toEqual(["updateNoteScript"]);
   });
 });

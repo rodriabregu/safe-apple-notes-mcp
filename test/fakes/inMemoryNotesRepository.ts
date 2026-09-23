@@ -2,10 +2,12 @@ import { NoteLockedError, NoteNotFoundError } from "../../src/domain/errors.js";
 import type {
   AppendedNote,
   CreatedNote,
+  DeletedNote,
   Folder,
   Note,
   NoteBodyFormat,
   NoteSummary,
+  UpdatedNote,
 } from "../../src/domain/note.js";
 import type { NotesRepository } from "../../src/domain/notesRepository.js";
 
@@ -129,5 +131,37 @@ export class InMemoryNotesRepository implements NotesRepository {
     note.plaintext = `${note.plaintext}\n${text}`;
     note.bodyHtml = `${note.bodyHtml}<div>${text}</div>`;
     return { id: note.id, title: note.title };
+  }
+
+  async deleteNote(id: string): Promise<DeletedNote> {
+    const index = this.notes.findIndex((n) => n.id === id);
+    if (index === -1) throw new NoteNotFoundError(id);
+    const note = this.notes[index];
+    if (note.locked) throw new NoteLockedError(id);
+    this.notes.splice(index, 1);
+    return {
+      id: note.id,
+      title: note.title,
+      folder: note.folder,
+      recoverableFrom: "Recently Deleted (30 days)",
+    };
+  }
+
+  async updateNote(id: string, body: string, title: string | undefined): Promise<UpdatedNote> {
+    const note = this.notes.find((n) => n.id === id);
+    if (!note) throw new NoteNotFoundError(id);
+    if (note.locked) throw new NoteLockedError(id);
+    const previousBody = `# ${note.title}\n\n${note.plaintext}`;
+    const newTitle = title ?? note.title;
+    note.title = newTitle;
+    note.plaintext = body;
+    note.bodyHtml = `<h1>${newTitle}</h1><div>${body}</div>`;
+    return {
+      id: note.id,
+      title: note.title,
+      folder: note.folder,
+      previousBody,
+      body: `# ${newTitle}\n\n${body}`,
+    };
   }
 }

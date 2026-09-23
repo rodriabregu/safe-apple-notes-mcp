@@ -57,12 +57,12 @@ async function handle(work: () => Promise<ToolResult>): Promise<ToolResult> {
 }
 
 /**
- * Builds the MCP server exposing exactly the 6 approved Apple Notes tools.
+ * Builds the MCP server exposing exactly the 8 approved Apple Notes tools.
  * `repo` is the only seam to Notes.app, so this function has no idea whether
  * it is talking to real AppleScript or a test fake.
  */
 export function createMcpServer(repo: NotesRepository): McpServer {
-  const server = new McpServer({ name: "apple-notes-mcp-lite", version: "0.1.0" });
+  const server = new McpServer({ name: "safe-apple-notes-mcp", version: "0.1.0" });
 
   server.registerTool(
     "list_folders",
@@ -157,6 +157,30 @@ export function createMcpServer(repo: NotesRepository): McpServer {
       _meta: TOOL_DEFINITIONS.append_to_note._meta,
     },
     async ({ id, text }) => handle(async () => ok(await repo.appendToNote(id, text)))
+  );
+
+  server.registerTool(
+    "delete_note",
+    {
+      title: TOOL_DEFINITIONS.delete_note.title,
+      description: TOOL_DEFINITIONS.delete_note.description,
+      inputSchema: TOOL_DEFINITIONS.delete_note.inputShape,
+      annotations: TOOL_DEFINITIONS.delete_note.annotations,
+      _meta: TOOL_DEFINITIONS.delete_note._meta,
+    },
+    async ({ id }) => handle(async () => ok(await repo.deleteNote(id)))
+  );
+
+  server.registerTool(
+    "update_note",
+    {
+      title: TOOL_DEFINITIONS.update_note.title,
+      description: TOOL_DEFINITIONS.update_note.description,
+      inputSchema: TOOL_DEFINITIONS.update_note.inputShape,
+      annotations: TOOL_DEFINITIONS.update_note.annotations,
+      _meta: TOOL_DEFINITIONS.update_note._meta,
+    },
+    async ({ id, body, title }) => handle(async () => ok(await repo.updateNote(id, body, title)))
   );
 
   return server;
