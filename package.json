@@ -1,16 +1,31 @@
 {
-  "name": "apple-notes-mcp-lite",
+  "name": "safe-apple-notes-mcp",
   "version": "0.1.0",
-  "description": "Minimal, read-mostly MCP server for Apple Notes on macOS.",
+  "description": "Safety-first MCP server for Apple Notes: single-note operations, human confirmation on every write, no batch destruction.",
   "type": "module",
+  "license": "MIT",
+  "author": "Rodrigo Alcino",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rodriabregu/safe-apple-notes-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "apple-notes",
+    "model-context-protocol",
+    "macos",
+    "claude"
+  ],
   "bin": {
-    "apple-notes-mcp-lite": "dist/index.js"
+    "safe-apple-notes-mcp": "dist/index.js"
   },
   "engines": {
     "node": ">=20"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
