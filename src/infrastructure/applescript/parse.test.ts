@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FIELD_SEP, RECORD_SEP } from "./delimiters.js";
 import {
   parseAppendResult,
+  parseCreateFolderResult,
   parseCreateResult,
   parseDateParts,
   parseDeleteResult,
@@ -163,6 +164,31 @@ describe("parseDeleteResult", () => {
     const raw = ["LOCKED", "id-1"].join(FIELD_SEP);
 
     expect(parseDeleteResult(raw)).toEqual({ locked: true, id: "id-1" });
+  });
+});
+
+describe("parseCreateFolderResult", () => {
+  it("parses a created folder's id, name, and account", () => {
+    const raw = ["folder-1", "Recipes", "iCloud"].join(FIELD_SEP);
+
+    expect(parseCreateFolderResult(raw)).toEqual({
+      outcome: "created",
+      id: "folder-1",
+      name: "Recipes",
+      account: "iCloud",
+    });
+  });
+
+  it("reports a duplicate with the existing folder's id", () => {
+    const raw = ["DUPLICATE", "folder-1"].join(FIELD_SEP);
+
+    expect(parseCreateFolderResult(raw)).toEqual({ outcome: "duplicate", existingId: "folder-1" });
+  });
+
+  it("reports an unknown account", () => {
+    const raw = ["NO_ACCOUNT", "Work"].join(FIELD_SEP);
+
+    expect(parseCreateFolderResult(raw)).toEqual({ outcome: "noAccount", account: "Work" });
   });
 });
 

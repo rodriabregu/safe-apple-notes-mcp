@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Single source of truth for the 6 approved MCP tools: their zod input
+ * Single source of truth for the 9 approved MCP tools: their zod input
  * shapes and human-readable descriptions. `mcpServer.ts` registers exactly
  * these tools and nothing else — the product's entire attack surface.
  */
@@ -180,6 +180,25 @@ export const TOOL_DEFINITIONS = {
         .describe("New title. When omitted, the note's existing title is kept."),
     },
     annotations: DESTRUCTIVE_WRITE_ANNOTATIONS,
+    _meta: REQUIRES_USER_INTERACTION,
+  },
+  create_folder: {
+    title: "Create folder",
+    description:
+      "Create a new folder in Notes.app (the default account's folder list if account is " +
+      "omitted). Refuses to create a duplicate: if a folder with this exact name already " +
+      "exists in the target account, the existing folder's id is reported instead. There is " +
+      "no delete, rename, or move for folders — this is the only folder-management operation " +
+      "this server exposes.",
+    inputShape: {
+      name: z.string().trim().min(1).max(100).describe("Folder name."),
+      account: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Account to create the folder in (default account if omitted)."),
+    },
+    annotations: WRITE_ANNOTATIONS,
     _meta: REQUIRES_USER_INTERACTION,
   },
 } as const;

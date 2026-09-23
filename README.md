@@ -3,10 +3,10 @@
 A safety-first [MCP](https://modelcontextprotocol.io) server for Apple Notes
 on macOS, for people who want to give an AI access to their notes without
 handing it the keys to delete or rewrite everything unsupervised. It talks to
-Notes.app through AppleScript (`osascript`) and exposes exactly 8 tools, all
-scoped to one note per call, with every write and delete tool forcing a human
-confirmation. If you want a bigger surface — tags, attachments, checklists,
-tables, batch operations — use
+Notes.app through AppleScript (`osascript`) and exposes exactly 9 tools, all
+scoped to one note (or one folder) per call, with every write and delete tool
+forcing a human confirmation. If you want a bigger surface — tags,
+attachments, checklists, tables, batch operations — use
 [sweetrb/apple-notes-mcp](https://github.com/sweetrb/apple-notes-mcp) instead;
 this project deliberately competes on safety, auditability, and size, not
 feature count.
@@ -22,9 +22,10 @@ convention.
 
 ## Safety model
 
-- **Exactly 8 tools**, enforced by a test that fails if one is ever added:
+- **Exactly 9 tools**, enforced by a test that fails if one is ever added:
   `list_folders`, `list_notes`, `search_notes`, `get_note` (read), and
-  `create_note`, `append_to_note`, `update_note`, `delete_note` (write).
+  `create_note`, `append_to_note`, `update_note`, `delete_note`,
+  `create_folder` (write).
 - **Every write/delete tool carries `anthropic/requiresUserInteraction`.**
   Claude Code (>= 2.1.199) prompts a human before calling any of the four
   write tools — regardless of permission mode or allow rules, including
@@ -39,8 +40,9 @@ convention.
   was overwritten.
 - **`append_to_note` never replaces.** It only ever adds content to the end
   of a note.
-- **No move, no folder create/delete/rename.** Folders are read-only from
-  this server's perspective.
+- **Folders are create-only.** `create_folder` refuses to create a duplicate
+  (it reports the existing folder's id instead) and never destroys anything.
+  There is no delete, rename, or move for folders, and there never will be.
 - **Password-protected notes are skipped in listings** (`list_notes`,
   `search_notes`) and **rejected with a clear error** everywhere else
   (`get_note`, `append_to_note`, `update_note`, `delete_note`). This server
@@ -58,8 +60,9 @@ no forced-confirmation metadata) and exposes `batch-delete-notes` and
 
 | | `safe-apple-notes-mcp` | `sweetrb/apple-notes-mcp` |
 | --- | --- | --- |
-| Tool count | 8 | 40+ |
+| Tool count | 9 | 40+ |
 | Batch delete | No | Yes (`batch-delete-notes`, `delete-folder`) |
+| Folder management | Create only, no duplicates | Create/delete/rename |
 | Server-forced confirmation on writes | Yes (`anthropic/requiresUserInteraction`) | No |
 | `destructiveHint` on destructive tools | Yes | No (only `readOnlyHint` is set) |
 | Update returns previous body | Yes (`update_note.previousBody`) | No |
@@ -80,6 +83,7 @@ no forced-confirmation metadata) and exposes `batch-delete-notes` and
 | `append_to_note` | Yes | `id`, `text` (plain text) | `{ id, title }` |
 | `update_note` | Yes | `id`, `body` (plain text), `title?` | `{ id, title, folder, previousBody, body }` (both bodies markdown) |
 | `delete_note` | Yes | `id` | `{ id, title, folder, recoverableFrom: "Recently Deleted (30 days)" }` |
+| `create_folder` | Yes | `name` (max 100 chars), `account?` | `{ id, name, account }` |
 
 `create_note` converts the plain-text body to HTML: `<h1>title</h1>`
 followed by one `<div>` per line (empty lines become `<div><br></div>`).
@@ -92,6 +96,12 @@ the note's existing title when omitted).
 don't have the id handy; the match is exact but case-insensitive. If the title
 matches more than one note, `get_note` reports the candidate ids instead of
 guessing, so you can retry with `id`.
+
+`create_folder` creates a folder in the given `account` (the default account
+when omitted). It refuses to create a duplicate — if a folder with this exact
+name already exists in the target account, it reports the existing folder's
+id instead of creating a second one — and fails clearly if `account` is given
+but doesn't exist. There is no `delete_folder`, `rename_folder`, or move.
 
 ## Install
 
@@ -144,14 +154,15 @@ permission error.
       "mcp__apple-notes__create_note",
       "mcp__apple-notes__append_to_note",
       "mcp__apple-notes__update_note",
-      "mcp__apple-notes__delete_note"
+      "mcp__apple-notes__delete_note",
+      "mcp__apple-notes__create_folder"
     ]
   }
 }
 ```
 
 The `ask` rules are belt-and-braces for older Claude Code versions that
-ignore the `_meta` flag — the four write/delete tools already carry
+ignore the `_meta` flag — the five write/delete tools already carry
 `anthropic/requiresUserInteraction`, which forces a prompt on current
 versions regardless of permission mode.
 
@@ -184,7 +195,7 @@ pnpm build          # compile src to dist
 Hexagonal / screaming architecture: `domain` defines the `NotesRepository`
 port and the entities; `infrastructure/applescript` is the only adapter that
 knows osascript exists; `interface/mcpServer.ts` wires a `NotesRepository`
-into the 8 MCP tools without knowing whether it's talking to AppleScript or a
+into the 9 MCP tools without knowing whether it's talking to AppleScript or a
 test fake.
 
 ## Roadmap

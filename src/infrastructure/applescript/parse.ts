@@ -4,7 +4,7 @@
  * a process, or the filesystem.
  */
 import { FIELD_SEP, RECORD_SEP } from "./delimiters.js";
-import { LOCKED_SENTINEL } from "./scripts.js";
+import { DUPLICATE_SENTINEL, LOCKED_SENTINEL, NO_ACCOUNT_SENTINEL } from "./scripts.js";
 
 /**
  * Parses a locale-independent "Y-M-D-H-m-s" date string into an ISO string.
@@ -139,4 +139,21 @@ export function parseUpdateResult(raw: string): ParsedUpdateResult {
   }
   const [id, title] = parts;
   return { locked: false, id, title };
+}
+
+export type ParsedCreateFolderResult =
+  | { outcome: "created"; id: string; name: string; account: string }
+  | { outcome: "duplicate"; existingId: string }
+  | { outcome: "noAccount"; account: string };
+
+export function parseCreateFolderResult(raw: string): ParsedCreateFolderResult {
+  const parts = raw.split(FIELD_SEP);
+  if (parts[0] === NO_ACCOUNT_SENTINEL) {
+    return { outcome: "noAccount", account: parts[1] };
+  }
+  if (parts[0] === DUPLICATE_SENTINEL) {
+    return { outcome: "duplicate", existingId: parts[1] };
+  }
+  const [id, name, account] = parts;
+  return { outcome: "created", id, name, account };
 }

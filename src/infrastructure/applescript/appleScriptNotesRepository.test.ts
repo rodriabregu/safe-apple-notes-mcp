@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { NoteLockedError, NoteNotFoundError } from "../../domain/errors.js";
+import { AccountNotFoundError, FolderAlreadyExistsError, NoteLockedError, NoteNotFoundError } from "../../domain/errors.js";
 import { AppleScriptNotesRepository } from "./appleScriptNotesRepository.js";
 import { AppleScriptError } from "../../domain/errors.js";
 import type { AppleScriptRunner } from "./runner.js";
@@ -316,6 +316,30 @@ describe("AppleScriptNotesRepository", () => {
       runner.enqueueError(new AppleScriptError("Can't get note id \"id-1\". Invalid index. (-1728)"));
 
       await expect(repo.updateNote("id-1", "Bread", undefined)).rejects.toThrow(NoteNotFoundError);
+    });
+  });
+
+  describe("createFolder", () => {
+    it("creates the folder and returns id/name/account", async () => {
+      runner.enqueue(["folder-1", "Recipes", "iCloud"].join(FIELD_SEP));
+
+      const folder = await repo.createFolder("Recipes", undefined);
+
+      expect(folder).toEqual({ id: "folder-1", name: "Recipes", account: "iCloud" });
+    });
+
+    it("throws FolderAlreadyExistsError, including the existing id, for the DUPLICATE sentinel", async () => {
+      runner.enqueue(["DUPLICATE", "folder-1"].join(FIELD_SEP));
+
+      await expect(repo.createFolder("Recipes", undefined)).rejects.toThrow(FolderAlreadyExistsError);
+      runner.enqueue(["DUPLICATE", "folder-1"].join(FIELD_SEP));
+      await expect(repo.createFolder("Recipes", undefined)).rejects.toThrow(/folder-1/);
+    });
+
+    it("throws AccountNotFoundError for the NO_ACCOUNT sentinel", async () => {
+      runner.enqueue(["NO_ACCOUNT", "Work"].join(FIELD_SEP));
+
+      await expect(repo.createFolder("Recipes", "Work")).rejects.toThrow(AccountNotFoundError);
     });
   });
 });

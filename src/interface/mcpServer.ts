@@ -8,7 +8,13 @@ import {
   MAX_SEARCH_NOTES_LIMIT,
   TOOL_DEFINITIONS,
 } from "../application/toolDefinitions.js";
-import { AmbiguousNoteTitleError, NoteLockedError, NoteNotFoundError } from "../domain/errors.js";
+import {
+  AccountNotFoundError,
+  AmbiguousNoteTitleError,
+  FolderAlreadyExistsError,
+  NoteLockedError,
+  NoteNotFoundError,
+} from "../domain/errors.js";
 import type { NotesRepository } from "../domain/notesRepository.js";
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
@@ -21,7 +27,9 @@ function domainErrorResult(error: unknown): ToolResult | undefined {
   if (
     error instanceof NoteNotFoundError ||
     error instanceof NoteLockedError ||
-    error instanceof AmbiguousNoteTitleError
+    error instanceof AmbiguousNoteTitleError ||
+    error instanceof AccountNotFoundError ||
+    error instanceof FolderAlreadyExistsError
   ) {
     return { isError: true, content: [{ type: "text", text: error.message }] };
   }
@@ -57,7 +65,7 @@ async function handle(work: () => Promise<ToolResult>): Promise<ToolResult> {
 }
 
 /**
- * Builds the MCP server exposing exactly the 8 approved Apple Notes tools.
+ * Builds the MCP server exposing exactly the 9 approved Apple Notes tools.
  * `repo` is the only seam to Notes.app, so this function has no idea whether
  * it is talking to real AppleScript or a test fake.
  */
@@ -181,6 +189,18 @@ export function createMcpServer(repo: NotesRepository): McpServer {
       _meta: TOOL_DEFINITIONS.update_note._meta,
     },
     async ({ id, body, title }) => handle(async () => ok(await repo.updateNote(id, body, title)))
+  );
+
+  server.registerTool(
+    "create_folder",
+    {
+      title: TOOL_DEFINITIONS.create_folder.title,
+      description: TOOL_DEFINITIONS.create_folder.description,
+      inputSchema: TOOL_DEFINITIONS.create_folder.inputShape,
+      annotations: TOOL_DEFINITIONS.create_folder.annotations,
+      _meta: TOOL_DEFINITIONS.create_folder._meta,
+    },
+    async ({ name, account }) => handle(async () => ok(await repo.createFolder(name, account)))
   );
 
   return server;

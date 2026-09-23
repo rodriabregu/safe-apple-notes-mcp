@@ -7,13 +7,16 @@ import {
 import {
   appendToNoteScript,
   buildCreateNoteHtml,
+  createFolderScript,
   createNoteScript,
   deleteNoteScript,
+  DUPLICATE_SENTINEL,
   findNotesByTitleScript,
   getNoteScript,
   listFoldersScript,
   listNotesScript,
   LOCKED_SENTINEL,
+  NO_ACCOUNT_SENTINEL,
   searchNotesScript,
   updateNoteScript,
 } from "./scripts.js";
@@ -289,6 +292,7 @@ describe("body replacement is exclusive to updateNoteScript", () => {
       appendToNoteScript: appendToNoteScript("id-1", "<div>x</div>"),
       deleteNoteScript: deleteNoteScript("id-1"),
       updateNoteScript: updateNoteScript("id-1", "<h1>T</h1><div>x</div>"),
+      createFolderScript: createFolderScript("Recipes", undefined),
     };
 
     const producers = Object.entries(scripts)
@@ -296,5 +300,59 @@ describe("body replacement is exclusive to updateNoteScript", () => {
       .map(([name]) => name);
 
     expect(producers).toEqual(["updateNoteScript"]);
+  });
+});
+
+describe("createFolderScript", () => {
+  it("uses the default account when no account is given", () => {
+    const script = createFolderScript("Recipes", undefined);
+
+    expect(script).toContain("set acct to default account");
+    expect(script).not.toContain("exists account");
+  });
+
+  it("targets an explicit account by name, checking it exists first", () => {
+    const script = createFolderScript("Recipes", "Work");
+
+    expect(script).toContain('exists account "Work"');
+    expect(script).toContain('set acct to account "Work"');
+  });
+
+  it("returns the NO_ACCOUNT sentinel when the named account doesn't exist", () => {
+    const script = createFolderScript("Recipes", "Work");
+
+    expect(script).toContain(NO_ACCOUNT_SENTINEL);
+    expect(script).toContain("if not (exists account");
+  });
+
+  it("returns the DUPLICATE sentinel with the existing folder's id when the folder already exists", () => {
+    const script = createFolderScript("Recipes", undefined);
+
+    expect(script).toContain("exists folder \"Recipes\" of acct");
+    expect(script).toContain(DUPLICATE_SENTINEL);
+    expect(script).toContain('(id of folder "Recipes" of acct)');
+  });
+
+  it("creates the folder in the resolved account and returns id/name/account", () => {
+    const script = createFolderScript("Recipes", undefined);
+
+    expect(script).toContain("tell acct to set f to make new folder with properties {name:\"Recipes\"}");
+    expect(script).toContain("(id of f)");
+    expect(script).toContain("(name of f)");
+    expect(script).toContain("(name of acct)");
+  });
+
+  it("escapes double quotes in the folder name and account name", () => {
+    const script = createFolderScript('Say "hi"', 'My "Work"');
+
+    expect(script).toContain('\\"hi\\"');
+    expect(script).toContain('\\"Work\\"');
+  });
+
+  it("never contains delete or rename — this tool only creates folders", () => {
+    const script = createFolderScript("Recipes", "Work");
+
+    expect(script.toLowerCase()).not.toContain("delete");
+    expect(script.toLowerCase()).not.toContain("rename");
   });
 });

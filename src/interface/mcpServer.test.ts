@@ -6,8 +6,8 @@ import { InMemoryNotesRepository } from "../../test/fakes/inMemoryNotesRepositor
 import { createMcpServer } from "./mcpServer.js";
 
 const READ_TOOL_NAMES = ["list_folders", "list_notes", "search_notes", "get_note"];
-const WRITE_TOOL_NAMES = ["create_note", "append_to_note", "update_note", "delete_note"];
-const NON_DESTRUCTIVE_WRITE_TOOL_NAMES = ["create_note", "append_to_note"];
+const WRITE_TOOL_NAMES = ["create_note", "append_to_note", "update_note", "delete_note", "create_folder"];
+const NON_DESTRUCTIVE_WRITE_TOOL_NAMES = ["create_note", "append_to_note", "create_folder"];
 const DESTRUCTIVE_WRITE_TOOL_NAMES = ["update_note", "delete_note"];
 
 async function connectedClient(repo: InMemoryNotesRepository) {
@@ -33,7 +33,7 @@ describe("createMcpServer", () => {
     repo = new InMemoryNotesRepository();
   });
 
-  it("exposes exactly the 8 approved tools and no others", async () => {
+  it("exposes exactly the 9 approved tools and no others", async () => {
     const client = await connectedClient(repo);
 
     const { tools } = await client.listTools();
@@ -41,6 +41,7 @@ describe("createMcpServer", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
         "append_to_note",
+        "create_folder",
         "create_note",
         "delete_note",
         "get_note",
@@ -375,5 +376,36 @@ describe("createMcpServer", () => {
 
     expect(result.isError).toBe(true);
     expect(textOf(result as never).toLowerCase()).toContain("password");
+  });
+
+  it("create_folder creates a folder via the repository", async () => {
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({ name: "create_folder", arguments: { name: "Recipes" } });
+    const created = JSON.parse(textOf(result as never));
+
+    expect(created).toEqual({ id: expect.any(String), name: "Recipes", account: "iCloud" });
+  });
+
+  it("create_folder returns an MCP tool error naming the existing folder's id for a duplicate", async () => {
+    const existing = repo.seedFolder({ id: "folder-1", name: "Recipes", account: "iCloud" });
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({ name: "create_folder", arguments: { name: "Recipes" } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never)).toContain(existing.id);
+  });
+
+  it("create_folder returns an MCP tool error for an unknown account", async () => {
+    const client = await connectedClient(repo);
+
+    const result = await client.callTool({
+      name: "create_folder",
+      arguments: { name: "Recipes", account: "Nonexistent" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never)).toContain("Nonexistent");
   });
 });

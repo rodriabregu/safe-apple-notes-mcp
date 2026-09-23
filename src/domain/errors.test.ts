@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { AmbiguousNoteTitleError, AppleScriptError, NoteLockedError, NoteNotFoundError } from "./errors.js";
+import {
+  AccountNotFoundError,
+  AmbiguousNoteTitleError,
+  AppleScriptError,
+  FolderAlreadyExistsError,
+  NoteLockedError,
+  NoteNotFoundError,
+} from "./errors.js";
 
 describe("NoteNotFoundError", () => {
   it("carries the missing note id in its message", () => {
@@ -34,6 +41,27 @@ describe("AmbiguousNoteTitleError", () => {
     expect(error.message).toContain('Multiple notes match title "Groceries". Use id instead:');
     expect(error.message).toContain("- id-1 (Personal, modified 2024-01-01T00:00:00.000Z)");
     expect(error.message).toContain("- id-2 (Work, modified 2024-02-01T00:00:00.000Z)");
+  });
+});
+
+describe("AccountNotFoundError", () => {
+  it("names the missing account in its message", () => {
+    const error = new AccountNotFoundError("Work");
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("AccountNotFoundError");
+    expect(error.message).toContain("Work");
+  });
+});
+
+describe("FolderAlreadyExistsError", () => {
+  it("names the folder and the id of the existing folder", () => {
+    const error = new FolderAlreadyExistsError("Recipes", "folder-1");
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("FolderAlreadyExistsError");
+    expect(error.message).toContain("Recipes");
+    expect(error.message).toContain("folder-1");
   });
 });
 

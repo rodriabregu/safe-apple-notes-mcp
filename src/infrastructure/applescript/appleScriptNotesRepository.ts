@@ -9,10 +9,17 @@ import type {
   UpdatedNote,
 } from "../../domain/note.js";
 import type { NotesRepository } from "../../domain/notesRepository.js";
-import { AppleScriptError, NoteLockedError, NoteNotFoundError } from "../../domain/errors.js";
+import {
+  AccountNotFoundError,
+  AppleScriptError,
+  FolderAlreadyExistsError,
+  NoteLockedError,
+  NoteNotFoundError,
+} from "../../domain/errors.js";
 import { htmlToMarkdown, htmlToPlaintext } from "../markdown/htmlToMarkdown.js";
 import {
   parseAppendResult,
+  parseCreateFolderResult,
   parseCreateResult,
   parseDeleteResult,
   parseFolderRecords,
@@ -26,6 +33,7 @@ import {
   appendToNoteScript,
   buildAppendHtml,
   buildCreateNoteHtml,
+  createFolderScript,
   createNoteScript,
   deleteNoteScript,
   findNotesByTitleScript,
@@ -154,5 +162,13 @@ export class AppleScriptNotesRepository implements NotesRepository {
       previousBody: htmlToMarkdown(current.body),
       body: htmlToMarkdown(html),
     };
+  }
+
+  async createFolder(name: string, account: string | undefined): Promise<Folder> {
+    const raw = this.runner.run(createFolderScript(name, account));
+    const parsed = parseCreateFolderResult(raw);
+    if (parsed.outcome === "noAccount") throw new AccountNotFoundError(parsed.account);
+    if (parsed.outcome === "duplicate") throw new FolderAlreadyExistsError(name, parsed.existingId);
+    return { id: parsed.id, name: parsed.name, account: parsed.account };
   }
 }

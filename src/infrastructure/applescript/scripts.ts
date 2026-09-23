@@ -11,6 +11,12 @@ import { escapeAppleScriptString, escapeHtml } from "./escape.js";
 /** Sentinel returned by scripts that reject a password-protected note. */
 export const LOCKED_SENTINEL = "LOCKED";
 
+/** Sentinel returned by {@link createFolderScript} when the folder already exists. */
+export const DUPLICATE_SENTINEL = "DUPLICATE";
+
+/** Sentinel returned by {@link createFolderScript} when the named account doesn't exist. */
+export const NO_ACCOUNT_SENTINEL = "NO_ACCOUNT";
+
 function quote(value: string): string {
   return `"${escapeAppleScriptString(value)}"`;
 }
@@ -309,5 +315,40 @@ tell application "Notes"
   end if
   set body of n to ${safeHtml}
   return (id of n) & ${AS_FIELD_SEP} & (name of n)
+end tell`;
+}
+
+/**
+ * Creates a folder in the given account (the default account when `account`
+ * is omitted). Refuses to create a duplicate: if a folder with this exact
+ * name already exists in the target account, the existing folder's id is
+ * returned via {@link DUPLICATE_SENTINEL} instead of creating a second one —
+ * a silent duplicate would confuse later `create_note` calls that target a
+ * folder by name. When `account` is given but doesn't exist, `exists
+ * account` is checked first and {@link NO_ACCOUNT_SENTINEL} is returned,
+ * rather than letting Notes.app raise an uncaught AppleScript error.
+ *
+ * There is deliberately no delete/rename/move for folders anywhere in this
+ * codebase — creating is the only folder-management operation this server
+ * exposes.
+ */
+export function createFolderScript(name: string, account: string | undefined): string {
+  const safeName = quote(name);
+  const acctSetup =
+    account !== undefined
+      ? `
+  if not (exists account ${quote(account)}) then
+    return "${NO_ACCOUNT_SENTINEL}" & ${AS_FIELD_SEP} & ${quote(account)}
+  end if
+  set acct to account ${quote(account)}`
+      : `
+  set acct to default account`;
+  return `
+tell application "Notes"${acctSetup}
+  if exists folder ${safeName} of acct then
+    return "${DUPLICATE_SENTINEL}" & ${AS_FIELD_SEP} & (id of folder ${safeName} of acct)
+  end if
+  tell acct to set f to make new folder with properties {name:${safeName}}
+  return (id of f) & ${AS_FIELD_SEP} & (name of f) & ${AS_FIELD_SEP} & (name of acct)
 end tell`;
 }

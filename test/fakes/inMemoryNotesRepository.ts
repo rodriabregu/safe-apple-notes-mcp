@@ -1,4 +1,9 @@
-import { NoteLockedError, NoteNotFoundError } from "../../src/domain/errors.js";
+import {
+  AccountNotFoundError,
+  FolderAlreadyExistsError,
+  NoteLockedError,
+  NoteNotFoundError,
+} from "../../src/domain/errors.js";
 import type {
   AppendedNote,
   CreatedNote,
@@ -30,13 +35,26 @@ function toSummary(note: StoredNote): NoteSummary {
  * In-process fake implementation of {@link NotesRepository}, used to exercise
  * `mcpServer.ts` without touching Notes.app.
  */
+/** Every account known to this fake; matches this codebase's verified fact
+ * that "iCloud" is the only account on the reference Mac, while still
+ * allowing tests to register more via {@link InMemoryNotesRepository.seedAccount}. */
+const DEFAULT_ACCOUNT = "iCloud";
+
 export class InMemoryNotesRepository implements NotesRepository {
   private readonly folders: Folder[] = [];
   private readonly notes: StoredNote[] = [];
+  private readonly accounts = new Set<string>([DEFAULT_ACCOUNT]);
   private nextId = 1;
+  private nextFolderId = 1;
 
-  seedFolder(folder: Folder): void {
+  seedFolder(folder: Folder): Folder {
     this.folders.push(folder);
+    this.accounts.add(folder.account);
+    return folder;
+  }
+
+  seedAccount(name: string): void {
+    this.accounts.add(name);
   }
 
   seedNote(
@@ -163,5 +181,17 @@ export class InMemoryNotesRepository implements NotesRepository {
       previousBody,
       body: `# ${newTitle}\n\n${body}`,
     };
+  }
+
+  async createFolder(name: string, account: string | undefined): Promise<Folder> {
+    const acctName = account ?? DEFAULT_ACCOUNT;
+    if (!this.accounts.has(acctName)) throw new AccountNotFoundError(acctName);
+
+    const existing = this.folders.find((f) => f.name === name && f.account === acctName);
+    if (existing) throw new FolderAlreadyExistsError(name, existing.id);
+
+    const folder: Folder = { id: `folder-${this.nextFolderId++}`, name, account: acctName };
+    this.folders.push(folder);
+    return folder;
   }
 }

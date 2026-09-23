@@ -12,10 +12,11 @@ import {
 } from "./toolDefinitions.js";
 
 describe("TOOL_DEFINITIONS", () => {
-  it("exposes exactly the eight approved tools and nothing else", () => {
+  it("exposes exactly the nine approved tools and nothing else", () => {
     expect(Object.keys(TOOL_DEFINITIONS).sort()).toEqual(
       [
         "append_to_note",
+        "create_folder",
         "create_note",
         "delete_note",
         "get_note",
@@ -180,6 +181,50 @@ describe("update_note annotations", () => {
 describe("create_note and append_to_note are not annotated destructive", () => {
   it.each(["create_note", "append_to_note"] as const)("%s destructiveHint is false", (name) => {
     expect(TOOL_DEFINITIONS[name].annotations.destructiveHint).toBe(false);
+  });
+});
+
+describe("create_folder input schema", () => {
+  const schema = z.object(TOOL_DEFINITIONS.create_folder.inputShape);
+
+  it("requires a non-empty name, account is optional", () => {
+    expect(() => schema.parse({})).toThrow();
+    expect(schema.parse({ name: "Recipes" }).account).toBeUndefined();
+  });
+
+  it("rejects an empty or whitespace-only name", () => {
+    expect(() => schema.parse({ name: "" })).toThrow();
+    expect(() => schema.parse({ name: "   " })).toThrow();
+  });
+
+  it("trims a name with surrounding whitespace", () => {
+    expect(schema.parse({ name: "  Recipes  " }).name).toBe("Recipes");
+  });
+
+  it("rejects a name longer than 100 characters", () => {
+    expect(() => schema.parse({ name: "a".repeat(101) })).toThrow();
+    expect(schema.parse({ name: "a".repeat(100) }).name).toBe("a".repeat(100));
+  });
+
+  it("accepts an optional account", () => {
+    expect(schema.parse({ name: "Recipes", account: "Work" })).toEqual({
+      name: "Recipes",
+      account: "Work",
+    });
+  });
+});
+
+describe("create_folder annotations", () => {
+  it("is a non-destructive, non-idempotent write that requires user interaction", () => {
+    expect(TOOL_DEFINITIONS.create_folder.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    });
+    expect(TOOL_DEFINITIONS.create_folder._meta).toEqual({
+      [REQUIRES_USER_INTERACTION_META]: true,
+    });
   });
 });
 

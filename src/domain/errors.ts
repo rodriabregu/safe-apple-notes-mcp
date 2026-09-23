@@ -42,3 +42,19 @@ export class AppleScriptError extends Error {
     this.name = "AppleScriptError";
   }
 }
+
+/** No account with this name exists in Notes.app. */
+export class AccountNotFoundError extends Error {
+  constructor(account: string) {
+    super(`No account found with name "${account}"`);
+    this.name = "AccountNotFoundError";
+  }
+}
+
+/** A folder with this name already exists in the target account. */
+export class FolderAlreadyExistsError extends Error {
+  constructor(name: string, existingId: string) {
+    super(`Folder "${name}" already exists (id "${existingId}")`);
+    this.name = "FolderAlreadyExistsError";
+  }
+}

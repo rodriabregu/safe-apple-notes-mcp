@@ -80,4 +80,13 @@ export interface NotesRepository {
    * @throws NoteLockedError when the note is password protected.
    */
   updateNote(id: string, body: string, title: string | undefined): Promise<UpdatedNote>;
+
+  /**
+   * Create a folder in the given account (the default account when omitted).
+   * Non-destructive: there is no delete/rename/move for folders.
+   * @throws AccountNotFoundError when `account` is given but doesn't exist.
+   * @throws FolderAlreadyExistsError when a folder with this name already
+   * exists in the target account.
+   */
+  createFolder(name: string, account: string | undefined): Promise<Folder>;
 }
